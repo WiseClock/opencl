@@ -21,14 +21,14 @@ using namespace std;
 
 struct Pixel
 {
-    unsigned int r;
-    unsigned int g;
-    unsigned int b;
+    unsigned char r;
+    unsigned char g;
+    unsigned char b;
 };
 
-int grayscaleFilter(const Pixel* pixels, Pixel*& newPixels, const int length)
+int grayscaleFilter(const Pixel* pixels, Pixel*& newPixels, const unsigned long int length)
 {
-    for (int i = 0; i < length; ++i)
+    for (unsigned long int i = 0; i < length; ++i)
     {
         const int r = pixels[i].r;
         const int g = pixels[i].g;
@@ -39,14 +39,14 @@ int grayscaleFilter(const Pixel* pixels, Pixel*& newPixels, const int length)
         // const double gray_d = (r * 0.3 + g * 0.59 + b * 0.11);
         // const int gray = (int)(gray_d + 0.5);
 
-        newPixels[i].r = gray;
+		newPixels[i].r = gray;
         newPixels[i].g = gray;
         newPixels[i].b = gray;
     }
     return 0;
 }
 
-int readImage(const char* name, struct Pixel*& pixels, int& width, int& height)
+int readImage(const char* name, struct Pixel*& pixels, unsigned long int& width, unsigned long int& height)
 {
     struct jpeg_decompress_struct cinfo;
     struct jpeg_error_mgr jerr;
@@ -65,12 +65,12 @@ int readImage(const char* name, struct Pixel*& pixels, int& width, int& height)
     width = cinfo.output_width;
     height = cinfo.output_height;
 
-    int row_stride = width * cinfo.output_components;
+	unsigned long int row_stride = width * cinfo.output_components;
     JSAMPARRAY buffer = (*cinfo.mem->alloc_sarray) ((j_common_ptr) &cinfo, JPOOL_IMAGE, row_stride, 1);
     pixels = (Pixel*)malloc(width * height * sizeof(Pixel));
 
     // process image line by line
-    int pixelCounter = 0;
+	unsigned long int pixelCounter = 0;
     while (cinfo.output_scanline < cinfo.output_height)
     {
         (void) jpeg_read_scanlines(&cinfo, buffer, 1);
@@ -98,7 +98,7 @@ int readImage(const char* name, struct Pixel*& pixels, int& width, int& height)
     return 0;
 }
 
-int writeImage(const char* name, const struct Pixel* pixels, const int width, const int height)
+int writeImage(const char* name, const struct Pixel* pixels, const unsigned long int width, const unsigned long int height)
 {
     struct jpeg_compress_struct cinfo;
     struct jpeg_error_mgr jerr;
@@ -123,10 +123,10 @@ int writeImage(const char* name, const struct Pixel* pixels, const int width, co
     jpeg_set_defaults(&cinfo);
     jpeg_start_compress(&cinfo, (boolean)true);
 
-    int row_stride = width * cinfo.input_components;
+	unsigned long int row_stride = width * cinfo.input_components;
     JSAMPARRAY buffer = (*cinfo.mem->alloc_sarray) ((j_common_ptr) &cinfo, JPOOL_IMAGE, row_stride, 1);
 
-    int counter = 0;
+	unsigned long int counter = 0;
     while(cinfo.next_scanline < cinfo.image_height)
     {
         for (int i = 0; i < width; ++i)
@@ -156,9 +156,8 @@ int main(int argc, char** argv)
     }
 
     struct Pixel* pixels;
-    int components;
-    int width;
-    int height;
+	unsigned long int width;
+	unsigned long int height;
     
     if (readImage(argv[1], pixels, width, height) == -1)
     {
@@ -218,12 +217,13 @@ int main(int argc, char** argv)
             {
                 // serial
                 chrono::high_resolution_clock::time_point start = chrono::high_resolution_clock::now();
-                struct Pixel* newPixels = (Pixel*)malloc(width * height * sizeof(Pixel));
+				struct Pixel* newPixels = (Pixel*)malloc(width * height * sizeof(Pixel));;
                 grayscaleFilter(pixels, newPixels, width * height);
                 chrono::high_resolution_clock::time_point finish = std::chrono::high_resolution_clock::now();
                 double elapsed = chrono::duration_cast<chrono::nanoseconds>(finish - start).count() / (double)1000000;
                 cout << endl << "Serial elapsed time: " << elapsed << " ms" << endl;
                 writeImage("out.jpg", newPixels, width, height);
+				delete newPixels;
                 break;
             }
             case 2:
@@ -259,6 +259,7 @@ int main(int argc, char** argv)
                 cout << endl << "OpenCL CPU elapsed time: " << elapsed << " ms" << endl;
 
                 writeImage("out.jpg", newPixels, width, height);
+				delete newPixels;
                 break;
             }
             case 3:
@@ -294,6 +295,7 @@ int main(int argc, char** argv)
                 cout << endl << "OpenCL GPU elapsed time: " << elapsed << " ms" << endl;
 
                 writeImage("out.jpg", newPixels, width, height);
+				delete newPixels;
                 break;
             }
             case 4:

@@ -1,8 +1,8 @@
 typedef struct tag_pixel
 {
-    unsigned int r;
-    unsigned int g;
-    unsigned int b;
+    unsigned char r;
+    unsigned char g;
+    unsigned char b;
 } Pixel;
 
 __kernel void grayscale(__global Pixel* pixels, __global Pixel* outPixels)
