@@ -151,8 +151,8 @@ int main(int argc, char** argv)
 {
     if (argc < 2)
     {
-        cout << argv[0] << " <file_name.jpg>" << endl;
-        return 1;
+        cerr << "Usage: " << argv[0] << " <file_name.jpg>" << endl;
+        return -1;
     }
 
     struct Pixel* pixels;
