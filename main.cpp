@@ -174,15 +174,32 @@ int main(int argc, char** argv)
         cout << "No valid OpenCL platform." << endl;
         return -1;
     }
-    cl::Platform platform = platforms.front();
     vector<cl::Device> clDevicesCPU;
     vector<cl::Device> clDevicesGPU;
-    platform.getDevices(CL_DEVICE_TYPE_CPU, &clDevicesCPU);
-    platform.getDevices(CL_DEVICE_TYPE_GPU, &clDevicesGPU);
+
+    for (auto const& platform : platforms)
+    {
+        vector<cl::Device> clTmpCPU;
+        vector<cl::Device> clTmpGPU;
+
+        platform.getDevices(CL_DEVICE_TYPE_CPU, &clTmpCPU);
+        platform.getDevices(CL_DEVICE_TYPE_GPU, &clTmpGPU);
+
+        if (clTmpCPU.size() > 0)
+            copy(clTmpCPU.begin(), clTmpCPU.end(), back_inserter(clDevicesCPU));
+        if (clTmpGPU.size() > 0)
+            copy(clTmpGPU.begin(), clTmpGPU.end(), back_inserter(clDevicesGPU));
+    }
+
     if (clDevicesCPU.size() == 0 && clDevicesGPU.size() == 0)
     {
         cout << "No valid OpenCL device." << endl;
         return -1;
+    }
+    else
+    {
+        cout << "OpenCL CPU device count: " << clDevicesCPU.size() << endl;
+        cout << "OpenCL GPU device count: " << clDevicesGPU.size() << endl;
     }
 
     fstream clFile("main.cl");
@@ -232,7 +249,7 @@ int main(int argc, char** argv)
                 if (clDevicesCPU.size() == 0)
                 {
                     cerr << "No available OpenCL CPU device." << endl;
-                    return -1;
+                    break;
                 }
                 cl::Device device = clDevicesCPU.front();
                 cl::Context context(device);
@@ -268,7 +285,7 @@ int main(int argc, char** argv)
                 if (clDevicesGPU.size() == 0)
                 {
                     cerr << "No available OpenCL GPU device." << endl;
-                    return -1;
+                    break;
                 }
                 cl::Device device = clDevicesGPU.front();
                 cl::Context context(device);
@@ -300,7 +317,59 @@ int main(int argc, char** argv)
             }
             case 4:
             {
-                cerr << "Not implemented." << endl;
+                if (clDevicesCPU.size() == 0 || clDevicesGPU.size() == 0)
+                {
+                    cerr << "Missing OpenCL CPU or GPU device." << endl;
+                    break;
+                }
+
+                unsigned long int sizeTotal = width * height;
+                unsigned long int sizeCPU = sizeTotal / 2;
+                unsigned long int sizeGPU = sizeTotal - sizeCPU;
+
+                cl::Device deviceCPU = clDevicesCPU.front();
+                cl::Device deviceGPU = clDevicesGPU.front();
+                cl::Context contextCPU(deviceCPU);
+                cl::Context contextGPU(deviceGPU);
+                cl::Program programCPU(contextCPU, sources);
+                cl::Program programGPU(contextGPU, sources);
+                auto err = programCPU.build("-cl-std=CL1.2");
+                err = programGPU.build("-cl-std=CL1.2");
+
+                cl::Buffer clBuffCPU(contextCPU, CL_MEM_READ_ONLY | CL_MEM_HOST_NO_ACCESS | CL_MEM_COPY_HOST_PTR, sizeof(Pixel) * sizeCPU, pixels);
+                cl::Buffer clOutBuffCPU(contextCPU, CL_MEM_WRITE_ONLY | CL_MEM_HOST_READ_ONLY, sizeof(Pixel) * sizeCPU);
+                cl::Kernel kernelCPU(programCPU, "grayscale", &err);
+                kernelCPU.setArg(0, clBuffCPU);
+                kernelCPU.setArg(1, clOutBuffCPU);
+
+                cl::Buffer clBuffGPU(contextGPU, CL_MEM_READ_ONLY | CL_MEM_HOST_NO_ACCESS | CL_MEM_COPY_HOST_PTR, sizeof(Pixel) * sizeGPU, pixels + sizeCPU);
+                cl::Buffer clOutBuffGPU(contextGPU, CL_MEM_WRITE_ONLY | CL_MEM_HOST_READ_ONLY, sizeof(Pixel) * sizeGPU);
+                cl::Kernel kernelGPU(programGPU, "grayscale", &err);
+                kernelGPU.setArg(0, clBuffGPU);
+                kernelGPU.setArg(1, clOutBuffGPU);
+
+                cl::CommandQueue queueCPU(contextCPU, deviceCPU);
+                cl::CommandQueue queueGPU(contextGPU, deviceGPU);
+
+                chrono::high_resolution_clock::time_point start = chrono::high_resolution_clock::now();
+
+                struct Pixel* newPixels = (Pixel*)malloc(width * height * sizeof(Pixel));
+
+                queueCPU.enqueueNDRangeKernel(kernelCPU, 0, cl::NDRange(sizeCPU));
+                queueCPU.enqueueReadBuffer(clOutBuffCPU, CL_FALSE, 0, sizeof(Pixel) * sizeCPU, newPixels);
+
+                queueGPU.enqueueNDRangeKernel(kernelGPU, 0, cl::NDRange(sizeGPU));
+                queueGPU.enqueueReadBuffer(clOutBuffGPU, CL_FALSE, 0, sizeof(Pixel) * sizeGPU, newPixels + sizeCPU);
+
+                queueCPU.finish();
+                queueGPU.finish();
+
+                chrono::high_resolution_clock::time_point finish = std::chrono::high_resolution_clock::now();
+                double elapsed = chrono::duration_cast<chrono::nanoseconds>(finish - start).count() / (double)1000000;
+                cout << endl << "OpenCL CPU + GPU elapsed time: " << elapsed << " ms" << endl;
+
+                writeImage("out.jpg", newPixels, width, height);
+                delete newPixels;
                 break;
             }
         }
