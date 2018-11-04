@@ -1,4 +1,15 @@
 .vscode/settings.json
-bin/.DS_Store
 lib/.DS_Store
 .DS_Store
+bin/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.sln
+Win32/
+Debug/
+program.dir/
