@@ -75,7 +75,7 @@ int readImage(const char* name, struct Pixel*& pixels, unsigned long int& width,
     {
         (void) jpeg_read_scanlines(&cinfo, buffer, 1);
         // process line pixels
-        for (int i = 0; i < width; ++i)
+        for (unsigned long i = 0; i < width; ++i)
         {
             pixels[pixelCounter].r = buffer[0][cinfo.output_components * i];
             if (cinfo.output_components > 2)
@@ -129,7 +129,7 @@ int writeImage(const char* name, const struct Pixel* pixels, const unsigned long
     unsigned long int counter = 0;
     while(cinfo.next_scanline < cinfo.image_height)
     {
-        for (int i = 0; i < width; ++i)
+        for (unsigned long i = 0; i < width; ++i)
         {
             buffer[0][cinfo.input_components * i] = pixels[counter].r;
             buffer[0][cinfo.input_components * i + 1] = pixels[counter].g;
@@ -252,6 +252,25 @@ int main(int argc, char** argv)
                     break;
                 }
                 cl::Device device = clDevicesCPU.front();
+
+                long lastRecordedPower = -1;
+                if (clDevicesCPU.size() > 1)
+                {
+                    for (size_t i = 0; i < clDevicesCPU.size(); ++i)
+                    {
+                        int maxComputeUnits;
+                        int maxFrequency;
+                        clDevicesCPU[i].getInfo(CL_DEVICE_MAX_COMPUTE_UNITS, &maxComputeUnits);
+                        clDevicesCPU[i].getInfo(CL_DEVICE_MAX_CLOCK_FREQUENCY, &maxFrequency);
+                        long power = maxComputeUnits * maxFrequency;
+                        if (power > lastRecordedPower)
+                        {
+                            device = clDevicesCPU[i];
+                            lastRecordedPower = power;
+                        }
+                    }
+                }
+
                 cl::Context context(device);
                 cl::Program program(context, sources);
                 auto err = program.build("-cl-std=CL1.2");
@@ -288,6 +307,25 @@ int main(int argc, char** argv)
                     break;
                 }
                 cl::Device device = clDevicesGPU.front();
+
+                long lastRecordedPower = -1;
+                if (clDevicesGPU.size() > 1)
+                {
+                    for (size_t i = 0; i < clDevicesGPU.size(); ++i)
+                    {
+                        int maxComputeUnits;
+                        int maxFrequency;
+                        clDevicesGPU[i].getInfo(CL_DEVICE_MAX_COMPUTE_UNITS, &maxComputeUnits);
+                        clDevicesGPU[i].getInfo(CL_DEVICE_MAX_CLOCK_FREQUENCY, &maxFrequency);
+                        long power = maxComputeUnits * maxFrequency;
+                        if (power > lastRecordedPower)
+                        {
+                            device = clDevicesGPU[i];
+                            lastRecordedPower = power;
+                        }
+                    }
+                }
+
                 cl::Context context(device);
                 cl::Program program(context, sources);
                 auto err = program.build("-cl-std=CL1.2");
@@ -329,6 +367,43 @@ int main(int argc, char** argv)
 
                 cl::Device deviceCPU = clDevicesCPU.front();
                 cl::Device deviceGPU = clDevicesGPU.front();
+
+                long lastRecordedPowerCPU = -1;
+                if (clDevicesCPU.size() > 1)
+                {
+                    for (size_t i = 0; i < clDevicesCPU.size(); ++i)
+                    {
+                        int maxComputeUnits;
+                        int maxFrequency;
+                        clDevicesCPU[i].getInfo(CL_DEVICE_MAX_COMPUTE_UNITS, &maxComputeUnits);
+                        clDevicesCPU[i].getInfo(CL_DEVICE_MAX_CLOCK_FREQUENCY, &maxFrequency);
+                        long power = maxComputeUnits * maxFrequency;
+                        if (power > lastRecordedPowerCPU)
+                        {
+                            deviceCPU = clDevicesCPU[i];
+                            lastRecordedPowerCPU = power;
+                        }
+                    }
+                }
+
+                long lastRecordedPowerGPU = -1;
+                if (clDevicesGPU.size() > 1)
+                {
+                    for (size_t i = 0; i < clDevicesGPU.size(); ++i)
+                    {
+                        int maxComputeUnits;
+                        int maxFrequency;
+                        clDevicesGPU[i].getInfo(CL_DEVICE_MAX_COMPUTE_UNITS, &maxComputeUnits);
+                        clDevicesGPU[i].getInfo(CL_DEVICE_MAX_CLOCK_FREQUENCY, &maxFrequency);
+                        long power = maxComputeUnits * maxFrequency;
+                        if (power > lastRecordedPowerGPU)
+                        {
+                            deviceGPU = clDevicesGPU[i];
+                            lastRecordedPowerGPU = power;
+                        }
+                    }
+                }
+
                 cl::Context contextCPU(deviceCPU);
                 cl::Context contextGPU(deviceGPU);
                 cl::Program programCPU(contextCPU, sources);
@@ -356,9 +431,9 @@ int main(int argc, char** argv)
                 struct Pixel* newPixels = (Pixel*)malloc(width * height * sizeof(Pixel));
 
                 queueCPU.enqueueNDRangeKernel(kernelCPU, 0, cl::NDRange(sizeCPU));
-                queueCPU.enqueueReadBuffer(clOutBuffCPU, CL_FALSE, 0, sizeof(Pixel) * sizeCPU, newPixels);
-
                 queueGPU.enqueueNDRangeKernel(kernelGPU, 0, cl::NDRange(sizeGPU));
+
+                queueCPU.enqueueReadBuffer(clOutBuffCPU, CL_FALSE, 0, sizeof(Pixel) * sizeCPU, newPixels);
                 queueGPU.enqueueReadBuffer(clOutBuffGPU, CL_FALSE, 0, sizeof(Pixel) * sizeGPU, newPixels + sizeCPU);
 
                 queueCPU.finish();
