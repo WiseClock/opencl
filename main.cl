@@ -8,7 +8,7 @@ typedef struct tag_pixel
 __kernel void grayscale(__global Pixel* pixels, __global Pixel* outPixels)
 {
     //int gid = 0;
-    int gid = get_global_id(0);
+    unsigned long gid = get_global_id(0);
     const int r = pixels[gid].r;
     const int g = pixels[gid].g;
     const int b = pixels[gid].b;
